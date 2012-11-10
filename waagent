@@ -226,6 +226,12 @@ def CreateAccount(user, password, expiration, thumbprint):
     if password != None:
         os.popen("chpasswd", "w").write(user + ":" + password + "\n")
     try:
+        # for RHEL 5.8 create sudoers.d
+        if not os.path.isdir('/etc/sudoers.d/'):
+            # create the /etc/sudoers.d/ directory
+            os.mkdir('/etc/sudoers.d/')
+            # add the include of sudoers.d to the /etc/sudoers
+            SetFileContents('/etc/sudoers',GetFileContents('/etc/sudoers')+'\n#includedir /etc/sudoers.d\n')
         if password == None:
             SetFileContents("/etc/sudoers.d/waagent", user + " ALL = (ALL) NOPASSWD: ALL\n")
         else:
@@ -447,6 +453,11 @@ def DeviceForIdePort(n):
                 if root.endswith("/block"):
                     device = dirs[0]
                     break
+                else : #RHEL_5.8
+                    for d in dirs:
+                        if ':' in d and "block" == d.split(':')[0]:
+                            device = d.split(':')[1]
+                            break
             break
     return device
 
@@ -1599,7 +1610,7 @@ class Agent(Util):
                     sock.bind(("0.0.0.0", 68))
                 sock.sendto(sendData, ("<broadcast>", 67))
                 sock.settimeout(30)
-                LogIfVerbose("DoDhcpWork: Setting socket.timeout=10, entering recv")
+                LogIfVerbose("DoDhcpWork: Setting socket.timeout=30, entering recv")
                 receiveBuffer = sock.recv(1024)
                 sock.close()
                 endpoint = self.HandleDhcpResponse(sendData, receiveBuffer)
@@ -2053,7 +2064,7 @@ Provisioning.SshHostKeyPairType=rsa     # Supported values are "rsa", "dsa" and 
 Provisioning.MonitorHostName=y          # Monitor host name changes and publish changes via DHCP requests.
 
 ResourceDisk.Format=y                   # Format if unformatted. If 'n', resource disk will not be mounted.
-ResourceDisk.Filesystem=ext4            #
+ResourceDisk.Filesystem=ext3            # 
 ResourceDisk.MountPoint=/mnt/resource   #
 ResourceDisk.EnableSwap=n               # Create and use swapfile on resource disk.
 ResourceDisk.SwapSizeMB=0               # Size of the swapfile.
@@ -2076,8 +2087,10 @@ WaagentLogrotate = """\
 """
 
 def AddToLinuxKernelCmdline(options):
-    if os.path.isfile("/boot/grub/menu.lst"):
-        Run("sed -i --follow-symlinks '/kernel/s|$| " + options + " |' /boot/grub/menu.lst")
+    # use truename if menu.lst is a symlink (RHEL 5.8)
+    filepath="/boot/grub/menu.lst"
+    if os.path.isfile(filepath):
+        Run("sed -i '/kernel/s|$| " + options + " |' " + os.path.realpath(filepath))
     filepath = "/etc/default/grub"
     if os.path.isfile(filepath):
         filecontents = GetFileContents(filepath).split('\n')
