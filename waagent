@@ -132,7 +132,7 @@ def DetectLinuxDistro():
         # see above at ubuntu
         try:
             cmd="dpkg -S %s" % os.path.basename(__file__)
-            retcode, krn = RunSafe(cmd)
+            retcode, krn = RunGetOutput(cmd,chk_err=False)
             if not retcode:
                PackagedForDistro = "Debian"
         except IOError as e:
